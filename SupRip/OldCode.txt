@@ -1,0 +1,316 @@
+﻿		private bool LineContainsPixels(byte[,] image, int line, int limit)
+		{
+			return LineContainsPixels(image, line, limit, 0, image.GetLength(1));
+		}
+
+		private bool LineContainsPixels(byte[,] image, int line, int limit, int x1, int x2)
+		{
+			try
+			{
+				int r = 0;
+
+				for (int i = x1; i < x2; i++)
+					r += image[line, i];
+
+				r = r / 100;
+
+				if (r > limit)
+					return true;
+				else
+					return false;
+			}
+			catch (IndexOutOfRangeException)
+			{
+				throw new EndOfImageReachedException();
+			}
+		}
+
+		private bool LineContainsPixels(byte[,] image, int line, int limit, double angle, int miny, int maxy, int x1, int x2)
+		{
+			if (angle == 0.0)
+				return LineContainsPixels(image, line, limit, x1, x2);
+
+			if (line < 0 || line > image.GetLength(0))
+				throw new EndOfImageReachedException();
+
+			int dy = (maxy + miny) / 2 - line;
+			int dx = (int)(angle * dy);
+			int startx = Math.Max(x1 + dx, 0);
+			int endx = Math.Min(x2 + dx, image.GetLength(1));
+
+			try
+			{
+				int r = 0;
+
+				for (int i = startx; i < endx; i++)
+					r += image[line, i];
+
+				r = r / 100;
+
+				if (r > limit)
+					return true;
+				else
+					return false;
+			}
+			catch (IndexOutOfRangeException)
+			{
+				throw new EndOfImageReachedException();
+			}
+		}
+
+		private bool ColumnContainsPixels(byte[,] image, int column, int limit, int y1, int y2)
+		{
+			try
+			{
+				int r = 0;
+
+				for (int i = y1; i < y2; i++)
+					r += image[i, column];
+
+				r = r / 100;
+
+				if (r > limit)
+					return true;
+				else
+					return false;
+			}
+			catch (IndexOutOfRangeException)
+			{
+				throw new EndOfImageReachedException();
+			}
+		}
+
+		private int ColumnFilledPixels(byte[,] image, int column, int limit, int y1, int y2)
+		{
+			try
+			{
+				int r = 0;
+
+				for (int i = y1; i < y2; i++)
+					r += image[i, column];
+
+				r /= 100;
+
+				return r;
+			}
+			catch (IndexOutOfRangeException)
+			{
+				throw new EndOfImageReachedException();
+			}
+		}
+
+		private bool ColumnContainsPixels(byte[,] image, int column, int limit, double angle, int y1, int y2)
+		{
+			if (angle == 0.0)
+				return ColumnContainsPixels(image, column, limit, y1, y2);
+
+			int w = image.GetLength(1);
+			if (column < 0 || column > w)
+				throw new EndOfImageReachedException();
+
+
+			int x1 = column + (int)((y2 - y1) * angle) / 2;
+
+			int ymax = Math.Min(y1 + (int)(x1 / angle), y2);
+			int ymin = Math.Max(y1 + (int)((x1 - w + 1) / angle) + 1, y1);
+
+			int r = 0;
+			for (int i = ymin; i < ymax; i++)
+				r += image[i, x1 - (int)((i - y1) * angle)];
+
+			r = r / 100;
+
+			if (r > limit)
+				return true;
+			else
+				return false;
+		}
+
+		public void OldFindLetters()
+		{
+			//letterLocations = new SubtitleLetter[0];
+			//return;
+			Rectangle r;
+			SubtitleLetter l;
+			int xStart, xEnd, yStart, yEnd;
+			int endOfLastLetter;
+			int letterNumber = 0;
+			int x, y = 0;
+			int limit = AppOptions.charSplitTolerance;
+			LinkedList<SubtitleLetter> letters = new LinkedList<SubtitleLetter>();
+
+			DateTime t = DateTime.Now;
+			TextLine[] textLines = FindTextLines(limit);
+			Debugger.linesTime += (DateTime.Now - t).TotalMilliseconds;
+
+			int lineNum = 0;
+			foreach (TextLine line in textLines)
+			{
+				lineNum++;
+				Debugger.Print(">>> New Line");
+				// If this isn't the first line, insert a line feed.
+				if (line.num != 0)
+				{
+					r = new Rectangle(1, line.start - 20, 10, 25);
+					letters.AddLast(new SubtitleLetter(letterNumber++, r, "\r\n"));
+				}
+
+				//Debugger.Print("# Line " + line.num);
+				t = DateTime.Now;
+				double angle = FindLineAngle(subtitleArray, line, limit);
+				//Debugger.Print("a = " + angle);
+				Debugger.angleTime += (DateTime.Now - t).TotalMilliseconds;
+
+				x = xEnd = 0;
+				int wordStart = 0;
+				int letterNum = 0;
+				while (x < subtitle.Size.Width)
+				{
+					letterNum++;
+					Debugger.Print("> New Letter");
+					if (lineNum == 2 && letterNum == 3)
+					{
+						//break;
+						;
+					}
+					// Remember the x coordinate of the end of the last letter so that we can use it later to find spaces
+					endOfLastLetter = xEnd;
+
+					// First, scan to the right until we find the start of a letter.
+					x = xEnd;
+					try
+					{
+						while (!ColumnContainsPixels(subtitleArray, x, limit, angle, line.start, line.end))
+							x++;
+					}
+					catch (EndOfImageReachedException)
+					{
+						// Looks like we reached the end of the bitmap, break out of the loop
+						break;
+					}
+					xStart = x;
+
+					// Check whether this letter is maybe having a rather faint left end, and extend it one pixel to the left if yes
+					if (x > 1 && ColumnContainsPixels(subtitleArray, xStart - 1, 0, angle, line.start, line.end) && !ColumnContainsPixels(subtitleArray, xStart - 2, 0, angle, line.start, line.end))
+						xStart--;
+
+					// If there was a lot of empty space, it was probably a space character and should be marked even if empty
+					// Unless xEnd is 0, meaning this is the first letter of the line, in that case it's just invisible whitespace
+					if (xEnd != 0)
+					{
+						if (xStart - endOfLastLetter > AppOptions.minimumSpaceCharacterWidth)
+						{
+							r = new Rectangle(endOfLastLetter + 2, line.start + 4, xStart - endOfLastLetter - 5, line.end - line.start - 10);
+							wordStart = xStart;
+							letters.AddLast(new SubtitleLetter(letterNumber++, r, angle, " "));
+						}
+						else if (xStart - endOfLastLetter > AppOptions.minimumSpaceCharacterWidth * 3 / 4)
+						{
+							// This is very close from being far apart enough to be a space character. Maybe it's some italic characters?
+							x = xEnd - 3;
+							while (ColumnContainsPixels(subtitleArray, x, limit, angle + 0.2, line.start, line.end) && x < xEnd + 3)
+								x++;
+							if (x < xEnd + 3)
+							{
+								endOfLastLetter = x;
+								while (!ColumnContainsPixels(subtitleArray, x, limit, angle + 0.2, line.start, line.end))
+									x++;
+								if (x - endOfLastLetter > AppOptions.minimumSpaceCharacterWidth)
+								{
+									// When scanning in italic mode the space is big enough, so make it a space character anyway
+									r = new Rectangle(endOfLastLetter + 2, line.start + 4, xStart - endOfLastLetter - 5, line.end - line.start - 10);
+									letters.AddLast(new SubtitleLetter(letterNumber++, r, angle, " "));
+								}
+							}
+
+							// Reset x again to the point where it was before italic scanning
+							x = xStart;
+						}
+					}
+					else
+						wordStart = xStart;
+
+					try
+					{
+						// Next, continue scanning until we find the end of it
+						while (ColumnContainsPixels(subtitleArray, x, limit, angle, line.start, line.end))
+							x++;
+
+						// If the search immediately terminated, we probably have a letter with a really fuzzy left edge that fooled the scanner
+						// Move the coordinates one pixel to the left and continue searching
+						if (x == xStart)
+						{
+							x++;
+							while (ColumnContainsPixels(subtitleArray, x, limit, angle, line.start, line.end))
+								x++;
+						}
+					}
+					catch (EndOfImageReachedException)
+					{
+						// Seems like the character has been cut off by the right edge of the image.
+						// This can happen with italic letters (most often periods and commas)
+						//x--;
+					}
+					xEnd = x;
+
+					if (xEnd == xStart)
+						throw new Exception("Letter with a width of 0 pixels found");
+
+					// Check whether this letter is maybe having a rather faint right end, and extend it one pixel to the left if yes
+					if (x < subtitle.Size.Width - 1 && ColumnContainsPixels(subtitleArray, xEnd + 1, 0, angle, line.start, line.end) && !ColumnContainsPixels(subtitleArray, xEnd + 2, 0, angle, line.start, line.end))
+						xEnd++;
+
+					// Now find the start and end line of the letter
+					try
+					{
+						y = line.start;
+						while (!LineContainsPixels(subtitleArray, y, limit, angle, line.start, line.end, xStart, xEnd))
+							y++;
+						yStart = y;
+						y = line.end;
+						while (!LineContainsPixels(subtitleArray, y, limit, angle, line.start, line.end, xStart, xEnd))
+							y--;
+						yEnd = y;
+
+						// Again, adjust the start and end of the letter a bit to improve the later character compares
+						if (LineContainsPixels(subtitleArray, yStart - 1, 0, angle, line.start, line.end, xStart, xEnd) && !LineContainsPixels(subtitleArray, yStart - 2, 0, angle, line.start, line.end, xStart, xEnd))
+							yStart--;
+						if (LineContainsPixels(subtitleArray, yEnd + 1, 0, angle, line.start, line.end, xStart, xEnd) && !LineContainsPixels(subtitleArray, yEnd + 2, 0, angle, line.start, line.end, xStart, xEnd))
+							yEnd++;
+
+						// If this letter is italic, we'll have to displace its bounding rectangle by a bit depending on how far its center is away from the center of the line
+						int dx;
+						if (angle != 0.0)
+						{
+							int my = (yEnd + yStart) / 2;
+							int omy = (line.start + line.end) / 2;
+							dx = (int)((omy - my) * angle);
+						}
+						else
+							dx = 0;
+
+						// Create a new rectangle and add it to the letters linked list
+						r = new Rectangle(xStart + dx, yStart, xEnd - xStart, yEnd - yStart);
+						t = DateTime.Now;
+						l = ExtractLetter(r, angle);
+						Debugger.extractTime += (DateTime.Now - t).TotalMilliseconds;
+						//Debugger.Print("x = " + xStart);
+						//Debugger.Print("w = " + r.Width + "; h = " + r.Height);
+						//Debugger.Print(st);
+						l.Number = letterNumber++;
+						l.Coords = r;
+						l.Height = line.end - yStart;
+						letters.AddLast(l);
+					}
+					catch (EndOfImageReachedException)
+					{
+					}
+				}
+			}
+
+			letterLocations = new SubtitleLetter[letters.Count];
+			letters.CopyTo(letterLocations, 0);
+
+			//CorrectItalics(textLines, limit);
+
+		}

@@ -1,0 +1,182 @@
+A Bluray SUP file is built out of sections. Several - usually five - sections together build one subtitle image.
+
+Each section consists of:
+
+struct section
+{
+	char[2] header;
+	uint32 pts1;
+	uint32 pts2;
+	byte sectionType;
+	uint16 dataLength;
+	byte[dataLength] data;
+}
+
+All numbers are big endian, so the highest value byte comes first.
+The header is always the two characters "PG". Using that header, a Bluray SUP can be told apart from a HD-DVD one which uses the header "SP"
+
+sectionType can be one of the following values:
+TIMES = 0x16
+SIZE = 0x17
+PALETTE = 0x14
+BITMAP = 0x15
+END = 0x80
+
+I haven't found any other sectionTypes yet, and therefore discovery of an unrecognized value here should probably cause a decoder to throw an error.
+
+Following the sectionType, a uint16 gives the length of the following data in bytes.
+The structure of the data itself depends on the type of it.
+
+
+
+
+TIMES
+
+The TIMES data is either 11, 19 or 27 bytes long
+
+struct timesData
+{
+	uint16 subtitleWidth;
+	uint16 subtitleHeight;
+	byte frameRate;
+	uint16 subtitleIndex;
+
+	byte unknown0;
+	uint16 unknown0;
+	byte numTimesBlocks;
+
+	timesBlock[numTimesBlocks] timesBlocks;
+}
+
+frameRate is always 0x10
+
+Bluray supports multiple blocks of subtitles in one image. In this case, they share the same display time and palette, but occupy different positions on the screen.
+
+struct timesBlock
+{
+	byte unknown0;
+	byte unknown1;
+	byte unknown2;
+	byte forced;
+	uint16 xPosition;
+	uint16 yPosition;
+}
+
+
+
+
+
+SIZE
+
+The SIZE data is either 10 or 19 bytes long. It contains information about the position and size of the subtitle.
+
+Normally, the data is just 10 bytes and numSizeBlocks is 1, but if there are multiple subtitles in this section, there might be a second one.
+
+struct sizeData
+{
+	byte numSizeBlocks;
+
+	sizeBlock[numSizeBlocks] sizeBlocks;
+}
+
+struct sizeBlock
+{
+	byte blockId;
+	uint16 x;
+	uint16 y;
+	uint16 width;
+	uint16 height;
+}
+
+
+
+PALETTE
+
+The PALETTE data is of variable size, but "dataLength mod 5 == 2" is always true
+
+The number of palette entries can be calculated from "dataLength / 5", truncating away the 0.4 reminder
+
+struct paletteData
+{
+	uint16 unknown0;
+	struct[numEntries] paletteEntry;
+}
+
+struct paletteEntry
+{
+	byte index;
+	byte y;
+	byte cr;
+	byte cb;
+	byte alpha;
+}
+
+unknown0 is a 16 bit int that is usually 0, but can sometimes also be 1 or 2.
+
+index gives the palette index of the following color. The indices are usually stored in order, but don't
+have to be. If the bitmap refers to a color number x, it always refers to the color whose index == x, not
+the xth color in the file or anything like it.
+
+y, cr, cb store the color in YCrCb format.
+To convert them into RGB, use the following formula
+
+	r = (byte)Math.Min(Math.Max(Math.Round(1.1644F * y + 1.596F * cr), 0), 255);
+	g = (byte)Math.Min(Math.Max(Math.Round(1.1644F * y - 0.813F * cr - 0.391F * cb), 0), 255);
+	b = (byte)Math.Min(Math.Max(Math.Round(1.1644F * y + 2.018F * cb), 0), 255);
+
+alpha is the transparency value, with zero being completely transparent
+
+
+
+BITMAP
+
+The BITMAP data is of variable length, and contains the subtitle itself as an RLE encoded bitmap.
+Since the maximal size of a section is 65536 bytes, and a subtitle bitmap can be longer than that,
+some large subtitles are split up into multiple BITMAP sections.
+
+The first such BITMAP section is built as follows:
+
+struct bitmapData
+{
+	uint32 unknown0;
+	byte unknown1;
+	uint16 unknown2;
+	uint16 width;
+	uint16 height;
+	byte[] bitmap;
+}
+
+width and height are the dimensions of the actual bitmap.
+The bitmap data itself is a stream of bytes. The pixels are RL-encoded in packets of size between
+1 and 4 bytes.
+
+Following is some pseudocode to decode the bitmap.
+add_pixels(num_pixels, color) is a function that adds num_pixels count of color pixels to the current line
+
+byte0 = read_next_byte();
+if (byte0 != 0)
+{
+	add_pixels(1, byte0)
+}
+else
+{
+	flag_a = read_next_bit();
+	flag_b = read_next_bit();
+
+	if (flag_b == 0)
+	{
+		count = read_6_bits();
+
+		if (count == 0)
+			count = length_of_rest_of_the_line();
+	}
+	else
+		count = read_14_bits();
+
+	if (flag_a == 0)
+		color = 0;
+	else
+		color = read_byte();
+
+	add_pixels(color, count);
+}

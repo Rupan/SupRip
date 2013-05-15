@@ -1,0 +1,202 @@
+HD-DVD subtitles consistently use low endian (= Motorola order) numbers through their
+files.
+
+A HD-DVD sup file is built out of sections, each of which defines one subtitle to display.
+
+struct SupFile
+{
+	Block[NumberOfSubtitles] blocks;
+}
+
+
+
+
+Each section starts with the two ASCII letters "SP", followed by 18 bytes of header data,
+the subtitle bitmap itself, then finally the subtitle metadata.
+
+struct Section
+{
+	char[2] identifier = {'S', 'P'};
+	int32 startTime;
+	int32 unknown1;
+	int16 unknown2;
+	int32 nextBlockPosition;
+	int32 controlSequencePosition;
+	byte[] subtitleBitmap;
+}
+
+
+
+
+The subtitle metadata is split into two control sequences.
+
+struct Metadata
+{
+	ControlSequence sequence1;
+	ControlSequence sequence2;
+}
+
+
+Each sequence starts with 6 bytes of header data, followed by blocks which contain the actual
+metadata.
+The first subsection always contains one block each of types 0x01, 0x83, 0x84, 0x85, 0x86
+and 0xff.
+The second subsection always contains just a 0x02 and 0xff.
+
+struct ControlSequence
+{
+	int16 timeCorrection;
+	int32 nextControlSequence;
+	MetadataBlock[] metadataBlocks;
+}
+
+
+
+
+Each block starts with a single byte that indicates the type of metadata stored in it,
+followed by the values.
+
+struct MetadataBlock
+{
+	byte type;
+	byte[ValueLength] value;
+}
+
+
+
+
+The different block types are:
+
+0x01 : StartTime
+
+ValueLength = 0
+
+This block contains no data.
+
+0x02 : EndTime
+
+ValueLength = 0
+
+This block itself contains no data. However, the duration of the subtitle is stored in the
+timeCorrection field of the current control sequence.
+
+durationInMilliseconds = ((timeCorrection << 10) + 1023) / 90;
+
+0x83 : ColorPalette
+
+ValueLength = 768
+
+This block contains the color palette of the subtitle in 256 entries of 3 bytes each in
+YCrCb format.
+The first byte is the Y value, the second the Cr, the third the Cb.
+
+The usual format to convert YCrCb into RGB is:
+	r = min(max(round(1.1644 * Y + 1.596 * Cr), 0), 255);
+	g = min(max(round(1.1644 * Y - 0.813 * Cr - 0.391 * Cb), 0), 255);
+	b = min(max(round(1.1644 * Y + 2.018 * Cb), 0), 255);
+
+
+0x84 : AlphaPalette
+
+ValueLength = 256
+
+The alpha palette to complement the above color data. 0xff is completely transparent.
+
+
+0x85 : Coordinates
+
+ValueLength = 6
+
+The x position, width, y position, height of the subtitle bitmap, in that order.
+Each number is 12 bit wide. I guess they didn't want to waste two precious bytes here
+because of the limitated space of HD-DVDs...
+
+struct SubtitleCoordinates
+{
+	int12 x;
+	int12 w;
+	int12 y;
+	int12 h;
+}
+
+0x86 : DataIndex
+
+ValueLength = 8
+
+Two pointers to the bitmap data of the subtitle. The first one points to the start of
+the odd lines, the second to the start of the even lines.
+
+struct SubtitleDataIndices
+{
+	int32 startOdd;
+	int32 startEven;
+}
+
+The two pointers are based on the start of the section plus 10.
+
+0xff : EndOfSubsection
+
+ValueLength = 0
+
+This block contains no data.
+
+Its presence means the end of the current subsection.
+
+
+
+
+
+
+
+
+Bitmap Data
+
+The subtitle itself is stored as a RLE compressed interlaced 256 color bitmap.
+Two values in the 0x86 metadata block store the location of the compressed data
+within the sup file. To calculate the start of the bitmap, take these values, add
+them to the position of the start of the subtitle section (the location of the 'S'
+character which defines the start of it) and add 10 (decimal) to it.
+
+The bitmap data is compressed with a simple RLE method. It however works on a bit
+level so a decoder has to implement a way to read the byte stream one bit at a time
+because codes might start and end in the middle of a byte.
+
+Following is some pseudo-code that will decode a line of subtitle bitmap.
+
+while (y < bitmap_height)
+{
+	x = 0;
+	while (x < bitmap_width)
+	{
+		rle_type = read_1_bit();
+		color_type = read_1_bit();
+
+		if (color_type == 1)
+			color = read_8_bits();
+		else
+			color = read_2_bits();        // Colors between 0 and 3 are stored in two bits only to save space
+
+		if (rle_type == 1)
+		{
+			rle_size = read_1_bit();
+
+			if (rle_size == 1)
+			{
+				number_of_pixels = read_7_bits();
+				number_of_pixels = number_of_pixels + 9;
+
+				if (number_of_pixels == 9)
+					number_of_pixels = bitmap_width - x;
+			}
+			else
+			{
+				number_of_pixels = read_3_bits();
+				number_of_pixels = number_of_pixels + 2;
+			}
+		}
+		else
+			number_of_pixels = 1;
+
+		append_pixels(color, number_of_pixels);
+	}
+}
