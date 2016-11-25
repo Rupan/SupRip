@@ -10,8 +10,9 @@ Download free Sharepoint designer installer there and select only "Microsoft Off
 Make sure you select also all the children of that option, otherwise you get a "Object hasn’t been initialized and can’t be used yet" 
 error.
 
-I tested this project on Visual Studio 2010, and it compiles and works ok.
+This project has been tested on Visual Studio 2010 and 2015, and it compiles and works ok.
 
 If you select "Release" as build mode and run it, it won't hang on the errors it gives about OCR in the debug mode.
 
-
+The relevant MDI files are installed (on x64) under:
+  C:\Program Files (x86)\Common Files\Microsoft Shared\MODI\12.0
