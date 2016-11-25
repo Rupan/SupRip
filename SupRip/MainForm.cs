@@ -950,7 +950,11 @@ namespace SupRip
 		private void startCharacterMap_Click(object sender, EventArgs e)
 		{
 			Process charMap = new Process();
-			charMap.StartInfo.FileName = System.Environment.GetFolderPath(Environment.SpecialFolder.System) + "\\charmap.exe";
+			int p = (int)Environment.OSVersion.Platform;
+			if ((p == 4) || (p == 128))
+				charMap.StartInfo.FileName = "/usr/bin/gucharmap";
+			else
+				charMap.StartInfo.FileName = System.Environment.GetFolderPath(Environment.SpecialFolder.System) + "\\charmap.exe";
 			charMap.Start();
 		}
 
