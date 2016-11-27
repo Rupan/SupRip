@@ -28,4 +28,4 @@ using the command:
 
   tlbimp MDIVWCTL.DLL /out: %userprofile%\Desktop\MODI.dll
 
-in the developer command pompt for VS2015.
+in the developer command pompt for VS2015.  The MODI type information will be embedded in the final executable.
