@@ -106,16 +106,6 @@ namespace SupRip
 			combineSubtitles.Checked = AppOptions.combineSubtitles;
             initialized = true;
 
-            try
-            {
-                Assembly x = Assembly.Load("Interop.MODI");
-				AppOptions.modiInstalled = true;
-            }
-            catch (FileNotFoundException)
-            {
-				AppOptions.modiInstalled = false;
-            }
-
 
 			System.Windows.Forms.Timer timer1 = new System.Windows.Forms.Timer();
 			timer1.Enabled = true;

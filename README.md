@@ -22,6 +22,7 @@ The file MODI.dll was produced using tlbimp.exe, documented here:
   https://msdn.microsoft.com/en-us/library/tt0cf3sx(v=vs.110).aspx
   https://msdn.microsoft.com/en-us/library/xwzy44e4(v=vs.110).aspx
   https://msdn.microsoft.com/en-us/library/fwawt96c(v=vs.110).aspx
+  https://msdn.microsoft.com/en-us/library/697w37zd(v=vs.110).aspx
 
 using the command:
 
