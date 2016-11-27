@@ -9,14 +9,7 @@ namespace SupRip
 	{
 		ManualResetEvent stopEvent, finishedEvent;
 		MainForm parentForm;
-		int nSubtitles, startingSubtitle;
-		bool reportUnknownChar;
-		int foundNum;
-
-		public int FoundNum
-		{
-			get { return foundNum; }
-		}
+		int nSubtitles;
 
 		public PrecalculateThread(MainForm f, ManualResetEvent se, ManualResetEvent fe, int n)
 		{
@@ -24,8 +17,6 @@ namespace SupRip
 			stopEvent = se;
 			finishedEvent = fe;
 			nSubtitles = n;
-
-			reportUnknownChar = false;
 		}
 
 		public void Run()

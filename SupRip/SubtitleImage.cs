@@ -10,7 +10,6 @@ namespace SupRip
 {
 	class SubtitleImage
 	{
-		Rectangle subtitleBorders;
 		public Bitmap subtitleBitmap;
 		public SubtitleCaption caption;
 		private byte[,] subtitleArray, uncorrectedArray;

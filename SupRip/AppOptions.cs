@@ -21,8 +21,6 @@ namespace SupRip
 		public static bool preservePositions;
 		public static bool combineSubtitles;
 
-		public static bool modiInstalled;
-
 		//public static List<string> easilyConfused = null, narrow = null;
 		private static Hashtable easilyConfused = null, narrow = null;
 
