@@ -14,5 +14,17 @@ This project has been tested on Visual Studio 2010 and 2015, and it compiles and
 
 If you select "Release" as build mode and run it, it won't hang on the errors it gives about OCR in the debug mode.
 
-The relevant MDI files are installed (on x64) under:
+The relevant MODI DLLs are installed (on x64) under:
   C:\Program Files (x86)\Common Files\Microsoft Shared\MODI\12.0
+
+The file MODI.dll was produced using tlbimp.exe, documented here:
+
+  https://msdn.microsoft.com/en-us/library/tt0cf3sx(v=vs.110).aspx
+  https://msdn.microsoft.com/en-us/library/xwzy44e4(v=vs.110).aspx
+  https://msdn.microsoft.com/en-us/library/fwawt96c(v=vs.110).aspx
+
+using the command:
+
+  tlbimp MDIVWCTL.DLL /out: %userprofile%\Desktop\MODI.dll
+
+in the developer command pompt for VS2015.
