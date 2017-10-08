@@ -1,6 +1,3 @@
-HD-DVD subtitles consistently use low endian (= Motorola order) numbers through their
-files.
-
 A HD-DVD sup file is built out of sections, each of which defines one subtitle to display.
 
 struct SupFile
@@ -16,12 +13,12 @@ the subtitle bitmap itself, then finally the subtitle metadata.
 
 struct Section
 {
-	char[2] identifier = {'S', 'P'};
-	int32 startTime;
+	char[2] identifier = {'S', 'P'}; // the position of the S is the start of the section
+	int32 startTime; (little endian)
 	int32 unknown1;
 	int16 unknown2;
-	int32 nextBlockPosition;
-	int32 controlSequencePosition;
+	int32 nextBlockPosition; // actualPosition = sectionStartPosition + nextBlockPosition + 1
+	int32 controlSequencePosition; // actualPosition = sectionStartPosition + controlSequencePosition + 10
 	byte[] subtitleBitmap;
 }
 
@@ -87,10 +84,14 @@ durationInMilliseconds = ((timeCorrection << 10) + 1023) / 90;
 ValueLength = 768
 
 This block contains the color palette of the subtitle in 256 entries of 3 bytes each in
-YCrCb format.
-The first byte is the Y value, the second the Cr, the third the Cb.
+YCbCr format.
+The first byte is the Y value, the second the Cb, the third the Cr.
 
-The usual format to convert YCrCb into RGB is:
+// Y = read_one_byte() - 16;
+// Cb = read_one_byte() - 128;
+// Cr = read_one_byte() - 128;
+
+The usual format to convert YCbCr into RGB is:
 	r = min(max(round(1.1644 * Y + 1.596 * Cr), 0), 255);
 	g = min(max(round(1.1644 * Y - 0.813 * Cr - 0.391 * Cb), 0), 255);
 	b = min(max(round(1.1644 * Y + 2.018 * Cb), 0), 255);
@@ -114,9 +115,9 @@ because of the limitated space of HD-DVDs...
 struct SubtitleCoordinates
 {
 	int12 x;
-	int12 w;
+	int12 w; // image width = w - x + 1
 	int12 y;
-	int12 h;
+	int12 h; // image height = h - y + 1
 }
 
 0x86 : DataIndex
@@ -128,8 +129,8 @@ the odd lines, the second to the start of the even lines.
 
 struct SubtitleDataIndices
 {
-	int32 startOdd;
-	int32 startEven;
+	int32 startOdd; // actualPosition = sectionStart + startOdd + 10
+	int32 startEven; // actualPosition = sectionStart + startEven + 10
 }
 
 The two pointers are based on the start of the section plus 10.
@@ -164,7 +165,7 @@ because codes might start and end in the middle of a byte.
 Following is some pseudo-code that will decode a line of subtitle bitmap.
 
 while (y < bitmap_height)
-{
+{	
 	x = 0;
 	while (x < bitmap_width)
 	{
@@ -174,7 +175,7 @@ while (y < bitmap_height)
 		if (color_type == 1)
 			color = read_8_bits();
 		else
-			color = read_2_bits();        // Colors between 0 and 3 are stored in two bits only to save space
+			color = read_2_bits(); // Colors between 0 and 3 are stored in two bits only to save space
 
 		if (rle_type == 1)
 		{
@@ -199,4 +200,7 @@ while (y < bitmap_height)
 
 		append_pixels(color, number_of_pixels);
 	}
+	
+	y++;
+	// when at the end of a line, the stream needs to use the next byte, regardless of the current bit it is on
 }
